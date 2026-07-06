@@ -1,3 +1,23 @@
+## AI Usage
+
+I used Claude to understand an unfamiliar codebase and to trace data flows before reading code in depth.
+
+**Codebase orientation.** My first ask was a high-level summary of how the app was structured. Claude correctly identified the three-layer pattern (routes → services → models) and pointed out that business logic was entirely in `services/`. That turned out to be accurate and saved me from spending time reading route files looking for logic that wasn't there. I checked by opening `routes/songs.py` and `routes/playlists.py`. The routes really were one-liners, exactly as described.
+
+**Tracing the streak bug.** For Issue 1, I described the symptom (streak resetting on Sundays) and asked Claude to walk through `update_listening_streak` step by step. It correctly identified the `today.weekday() != 6` guard as the problem but initially framed the fix as simply removing that condition. That was incomplete — removing it would have fixed Sundays but still left the Monday-after-Saturday case unhandled. I re-read the function myself and realized the fix needed a second branch for `days_since_last == 2 and today.weekday() == 0`. I had to work that part out independently before the logic was actually correct.
+
+**Confirming the threshold bug.** For Issue 2, I asked Claude what `timedelta(hours=24)` would mean in practice for a "listening now" feed. It confirmed that 24 hours is far too wide a window and would include events from yesterday. It matched what I observed in the seed data (Kenji's event was 26 hours old and still appeared). The fix - changing it to `timedelta(minutes=30)` — was straightforward once I found the constant, and Claude's explanation didn't add anything beyond what reading the one-line constant made obvious.
+
+**Understanding the search duplicate issue.** For Issue 3, I asked Claude to explain what an `outerjoin` on an association table does when the joined table isn't referenced in the WHERE clause. The explanation of row fan-out (one row per tag per song) was clear and accurate. However, Claude initially suggested the fix was only to add `.distinct()`. After reading the issue description again, I realized the query was also missing the tag filter entirely — songs with matching tags couldn't be found at all, not just deduplicated. I added both `.distinct()` and confirmed that the tag filter was a separate gap, not something Claude flagged unprompted.
+
+**Notification gap in `rate_song`.** For Issue 4, I asked Claude to compare `add_to_playlist` and `rate_song` side by side and identify what was structurally different. It correctly spotted that `rate_song` had no call to `create_notification` after the upsert. The explanation here was complete and directly actionable. The fix was just mirroring the pattern from `add_to_playlist`, which Claude pointed me toward explicitly.
+
+**Playlist slice bug.** For Issue 5, I described the symptom (last song always missing) and asked Claude where in `get_playlist_songs` a song could be dropped. It immediately pointed to the `[:-1]` slice. I verified by checking the seed data. "Late Night Vibes" has 7 entries in the database, and the endpoint was consistently returning 6. The fix was a one-character change and Claude's diagnosis was right the first time.
+
+**Where I had to verify things myself.** The streak fix required me to reason through the calendar logic independently because Claude's initial suggestion was incomplete. The search fix required me to notice the missing tag filter on my own. Claude focused on deduplication but didn't flag that tag-based searches were completely broken. In both cases, I read the code myself and ran through the logic manually before finalizing the fix. I treated Claude's explanations as a starting point to confirm or refute, not as a finished answer.
+
+---
+
 ## Codebase Map
 
 ### Top-Level Structure
